@@ -110,11 +110,11 @@ namespace MotorControllers.EposMotor
          ushort data = 0;
          ushort carry = 0;
          ushort CRC = 0;
-         ushort mask = 0x4000;
+         ushort mask = 0x8000;
          //Calculate WordArray Word by Word            
          for (ushort WordNum = 0; WordNum <= (numberOfWords - 1); WordNum++)
          {
-            shifter = 0x4000;
+            shifter = 0x8000;
             data = nWordArray[WordNum];
 
             do
