@@ -1,8 +1,9 @@
 ﻿using System;
 using System.IO.Ports;
+using System.Runtime.Remoting.Messaging;
 
 namespace MotorControllers.EposMotor
-{
+{ 
    public class EposMotor : IMotorBasicFunctions
    {
       // serial port object with the appropriate settings
@@ -14,10 +15,12 @@ namespace MotorControllers.EposMotor
       string _systemStatus;                        // used for system diagnostics
       bool _com1EventSet = false;
 
-      // instance constructor
-      public EposMotor(SerialPort _com1)
+      public EposMotor(ushort portNum)
       {
-         _com1 = new SerialPort("_com1", 9600, Parity.None, 8, StopBits.One);
+         if (portNum < 1)
+            throw new ArgumentOutOfRangeException(nameof(portNum) + " cannot be zero");
+         
+         _com1 = new SerialPort("COM" + portNum, 9600, Parity.None, 8, StopBits.One);
       }
 
       // Read/Write states
@@ -30,21 +33,21 @@ namespace MotorControllers.EposMotor
       // FormatReadMessage receives an index and subindex and returns a byte array containing a specific instruction that can be written to the EPOS
       private byte[] FormatReadMessage(Int16 index, byte subindex)
       {
-         byte[] MessageToSend = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }; // 10 bytes
+         byte[] msgSent = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }; // 10 bytes
 
-         MessageToSend[0] = 0x10;                            // write mode
-         MessageToSend[1] = 0x01;                            // length-1  
-         MessageToSend[2] = (byte)(index & 255);             // indexbyte1 -> extracted first set of 8 bits from index int
-         MessageToSend[3] = (byte)((index >> 8) & 255);      // indexbyte2 -> extracted second set of 8 bits from index int
-         MessageToSend[4] = subindex;                        // subindex
-         MessageToSend[5] = 0x02;                            // node ID
+         msgSent[0] = 0x10;                            // write mode
+         msgSent[1] = 0x01;                            // length-1  
+         msgSent[2] = (byte)(index & 255);             // indexbyte1 -> extracted first set of 8 bits from index int
+         msgSent[3] = (byte)((index >> 8) & 255);      // indexbyte2 -> extracted second set of 8 bits from index int
+         msgSent[4] = subindex;                        // subindex
+         msgSent[5] = 0x02;                            // node ID
 
-         ushort CRC = CalcFieldCRC(MessageToSend, 4);
-         MessageToSend[6] = (byte)CRC;                       // CRC Low byte
-         MessageToSend[7] = (byte)(CRC / 256);               // CRC High Byte
-         MessageToSend[8] = 0x4F;                            // acknowledgement (ASCII "O")
-         MessageToSend[9] = 0x46;                            // failed acknowledgement (ASCII "F")
-         return MessageToSend;
+         ushort CRC = CalcFieldCRC(msgSent, 4);
+         msgSent[6] = (byte)CRC;                       // CRC Low byte
+         msgSent[7] = (byte)(CRC / 256);               // CRC High Byte
+         msgSent[8] = 0x4F;                            // acknowledgement (ASCII "O")
+         msgSent[9] = 0x46;                            // failed acknowledgement (ASCII "F")
+         return msgSent;
       }
       #endregion FormatReadMessage
 
@@ -53,25 +56,26 @@ namespace MotorControllers.EposMotor
       // FormatWriteMessage receives an index and data and returns a byte array containing a specific instruction that can be written to the EPOS
       private byte[] FormatWriteMessage(Int16 index, Int32 data)
       {
-         byte[] byMessageToSend = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }; // 14 bytes
+         byte[] msgSent = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }; // 14 bytes
 
-         byMessageToSend[0] = 0x11;                            // write mode
-         byMessageToSend[1] = 0x03;                            // length-1  
-         byMessageToSend[2] = (byte)(index & 255);             // indexbyte1 -> extracted first set of 8 bits from the index int
-         byMessageToSend[3] = (byte)((index >> 8) & 255);      // indexbyte2 -> extracted second set of 8 bits from the index int
-         byMessageToSend[4] = 0x00;                            // subindex
-         byMessageToSend[5] = 0x02;                            // node ID
-         byMessageToSend[6] = (byte)(data & 255);              // databyte1 -> extracted first set of 8 bits from int
-         byMessageToSend[7] = (byte)((data >> 8) & 255);       // databyte2 -> extracted second set of 8 bits from int
-         byMessageToSend[8] = (byte)((data >> 16) & 255);      // databyte3 -> extracted third set of 8 bits from int
-         byMessageToSend[9] = (byte)((data >> 24) & 255);      // databyte4 -> extracted fourth set of 8 bits from int
+         msgSent[0] = 0x11;                            // write mode
+         msgSent[1] = 0x03;                            // length-1  
+         msgSent[2] = (byte)(index & 255);             // indexbyte1 -> extracted first set of 8 bits from the index int
+         msgSent[3] = (byte)((index >> 8) & 255);      // indexbyte2 -> extracted second set of 8 bits from the index int
+         msgSent[4] = 0x00;                            // subindex
+         msgSent[5] = 0x02;                            // node ID
+         msgSent[6] = (byte)(data & 255);              // databyte1 -> extracted first set of 8 bits from int
+         msgSent[7] = (byte)((data >> 8) & 255);       // databyte2 -> extracted second set of 8 bits from int
+         msgSent[8] = (byte)((data >> 16) & 255);      // databyte3 -> extracted third set of 8 bits from int
+         msgSent[9] = (byte)((data >> 24) & 255);      // databyte4 -> extracted fourth set of 8 bits from int
 
-         ushort CRC = CalcFieldCRC(byMessageToSend, 6);
-         byMessageToSend[10] = (byte)CRC;                      // CRC Low byte
-         byMessageToSend[11] = (byte)(CRC / 256);              // CRC High Byte
-         byMessageToSend[12] = 0x4F;                           // acknowledgement (ASCII "O")
-         byMessageToSend[13] = 0x46;                           // failed acknowledgement (ASCII "F")            
-         return byMessageToSend;
+         ushort CRC = CalcFieldCRC(msgSent, 6);
+         msgSent[10] = (byte)CRC;                      // CRC Low byte
+         msgSent[11] = (byte)(CRC / 256);              // CRC High Byte
+         msgSent[12] = 0x4F;                           // acknowledgement (ASCII "O")
+         msgSent[13] = 0x46;                           // failed acknowledgement (ASCII "F")            
+         
+         return msgSent;
       }
 
       #endregion FormatWriteMessage
@@ -79,31 +83,31 @@ namespace MotorControllers.EposMotor
       #region CRC
 
       //Maxon CRC check converted from C++ example
-      ushort CalcFieldCRC(byte[] ByteArray, ushort numberOfWords)
+      ushort CalcFieldCRC(byte[] byteArray, ushort numOfWords)
       {
          ushort[] nWordArray = { 0, 0, 0, 0, 0, 0 };
          int iDataX;
          int iDataY;
          //Decode bytes into word array for CRC check
-         iDataX = ByteArray[1];
-         iDataY = ByteArray[0] * 256;
+         iDataX = byteArray[1];
+         iDataY = byteArray[0] * 256;
          nWordArray[0] = (ushort)(iDataX + iDataY);
-         iDataX = ByteArray[2];
-         iDataY = ByteArray[3] * 256;
+         iDataX = byteArray[2];
+         iDataY = byteArray[3] * 256;
          nWordArray[1] = (ushort)(iDataX + iDataY);
-         iDataX = ByteArray[4];
-         iDataY = ByteArray[5] * 256;
+         iDataX = byteArray[4];
+         iDataY = byteArray[5] * 256;
          nWordArray[2] = (ushort)(iDataX + iDataY);
-         iDataX = ByteArray[6];
-         iDataY = ByteArray[7] * 256;
+         iDataX = byteArray[6];
+         iDataY = byteArray[7] * 256;
          nWordArray[3] = (ushort)(iDataX + iDataY);
-         if (numberOfWords > 4)
+         if (numOfWords > 4)
          {
-            iDataX = ByteArray[8];
-            iDataY = ByteArray[9] * 256;
+            iDataX = byteArray[8];
+            iDataY = byteArray[9] * 256;
             nWordArray[4] = (ushort)(iDataX + iDataY);
-            iDataX = ByteArray[10];
-            iDataY = ByteArray[11] * 256;
+            iDataX = byteArray[10];
+            iDataY = byteArray[11] * 256;
             nWordArray[5] = (ushort)(iDataX + iDataY);
          }
          ushort shifter;
@@ -112,10 +116,10 @@ namespace MotorControllers.EposMotor
          ushort CRC = 0;
          ushort mask = 0x8000;
          //Calculate WordArray Word by Word            
-         for (ushort WordNum = 0; WordNum <= (numberOfWords - 1); WordNum++)
+         for (ushort wordNum = 0; wordNum <= (numOfWords - 1); wordNum++)
          {
             shifter = 0x8000;
-            data = nWordArray[WordNum];
+            data = nWordArray[wordNum];
 
             do
             {
@@ -142,199 +146,199 @@ namespace MotorControllers.EposMotor
 
       #region ReceiveData
 
-      private RWSts ReceiveData(byte[] aRS232set, RWSts Receive)
+      private RWSts ReceiveData(byte[] rs232Set, RWSts receive)
       {
          // dynamicly re-sizeable array based on the amount of bytes in the serial receive buffer
-         byte[] byRS232buffer = new byte[_com1.BytesToRead];
+         byte[] rs232Buff = new byte[_com1.BytesToRead];
 
-         switch (Receive.Step)
+         switch (receive.Step)
          {
             // initialise variables used for communication
             case 0:
-               Receive.State = Status.Processing;
-               Receive.Step = 1;
+               receive.State = Status.Processing;
+               receive.Step = 1;
                break;
 
             case 1:
-               //Send 1st byte to EPOS2, this is the OPCode (0x10 = Read, 0X11 = Write)
-               _com1.Write(aRS232set, 0, 1);
+               //send 1st byte to EPOS2, this is the OPCode (0x10 = Read, 0X11 = Write)
+               _com1.Write(rs232Set, 0, 1);
                // Store curent ticks + 1 second for timeout on recieve
                _endTicks = Environment.TickCount + 1000;
                // Go to next step 
-               Receive.Step = 2;
+               receive.Step = 2;
                break;
 
             case 2:
                // Wait for event handler data recieved
                if (_dataReceived)
                {
-                  Receive.Step = 3;
+                  receive.Step = 3;
                }
                if (Environment.TickCount > _endTicks)
                {
                   // No response within 1 second
-                  Receive.Step = 40;
+                  receive.Step = 40;
                }
                break;
 
             case 3:
                // Read the response from the EPOS                          
-               _com1.Read(byRS232buffer, 0, _com1.BytesToRead);
+               _com1.Read(rs232Buff, 0, _com1.BytesToRead);
                // Reset received flag
                _dataReceived = false;
-               Receive.Step = 4;
+               receive.Step = 4;
                break;
 
             case 4:
                // Write request string to read the software version
-               _com1.Write(aRS232set, 1, 7);
+               _com1.Write(rs232Set, 1, 7);
                // Store curent ticks + 1 second for timeout on recieve
                _endTicks = Environment.TickCount + 1000;
-               Receive.Step = 5;
+               receive.Step = 5;
                break;
 
             case 5:
                //Wait for event handler to say data recieved
                if (_dataReceived)
                {
-                  Receive.Step = 6;
+                  receive.Step = 6;
                }
                if (Environment.TickCount > _endTicks)
                {
                   // No response within 1 second
-                  Receive.Step = 40;
+                  receive.Step = 40;
                }
                break;
 
             case 6:
-               // Receive data from buffer
-               _com1.Read(byRS232buffer, 0, _com1.BytesToRead);
+               // receive data from buffer
+               _com1.Read(rs232Buff, 0, _com1.BytesToRead);
                _dataReceived = false;
                // Check if the response back is an 'O' character to say data request was received OKEn
-               if (byRS232buffer[0] == 79)
+               if (rs232Buff[0] == 79)
                {
-                  Receive.Step = 7;
+                  receive.Step = 7;
                }
                else
                {
                   // error in reading response from the Epos
-                  Receive.Step = 30;
+                  receive.Step = 30;
                }
 
                break;
 
             case 7:
                // write acknowledgement
-               _com1.Write(aRS232set, 8, 1);
+               _com1.Write(rs232Set, 8, 1);
                // Store curent ticks + 1 second for timeout on recieve
                _endTicks = Environment.TickCount + 1000;
-               Receive.Step = 8;
+               receive.Step = 8;
                break;
 
             case 8:
                //Wait for event handler data recieved
                if (_dataReceived)
                {
-                  Receive.Step = 9;
+                  receive.Step = 9;
                }
                if (Environment.TickCount > _endTicks)
                {
                   // No response within 1 second
-                  Receive.Step = 40;
+                  receive.Step = 40;
                }
                break;
 
             case 9:
-               // Receive data from the buffer
-               _com1.Read(byRS232buffer, 0, _com1.BytesToRead);
+               // receive data from the buffer
+               _com1.Read(rs232Buff, 0, _com1.BytesToRead);
                // reset data received flag            
                try
                {
                   // interpret the reponse from the controller -> extract the 5th and 6th byte and convert to a word
-                  _statusWord = (ushort)((((ushort)(byRS232buffer[6] * 256)) + ((ushort)byRS232buffer[5]) & 0x417F));
+                  _statusWord = (ushort)((((ushort)(rs232Buff[6] * 256)) + ((ushort)rs232Buff[5]) & 0x417F));
                }
                catch (Exception e)
                {
                   // exception error handling
                   _systemStatus = e.ToString();
                   // Control word could not be interpreted
-                  Receive.Step = 30;
+                  receive.Step = 30;
                   break;
                }
                _dataReceived = false;
-               Receive.Step = 10;
+               receive.Step = 10;
                break;
 
             case 10:
                // write acknowledgement (character "O")
-               _com1.Write(aRS232set, 8, 1);
+               _com1.Write(rs232Set, 8, 1);
 
                // Report successful finish
-               Receive.Step = 20;
+               receive.Step = 20;
                break;
 
             // Operation Finished sucessfully
             case 20:
-               Receive.Step = 0;
-               Receive.State = Status.FinishedOk;
-               Receive.Message = "Operation Finished Sucessfully";
+               receive.Step = 0;
+               receive.State = Status.FinishedOk;
+               receive.Message = "Operation Finished Sucessfully";
                break;
 
             // Communications error received
             case 30:
-               Receive.Step = 0;
-               Receive.State = Status.Failed;
-               Receive.Message = "Communication Error Received";
+               receive.Step = 0;
+               receive.State = Status.Failed;
+               receive.Message = "Communication Error Received";
                break;
 
             // Operation timed out
             case 40:
-               Receive.Step = 0;
-               Receive.State = Status.TimedOut;
-               Receive.Message = "Operation Timed Out";
+               receive.Step = 0;
+               receive.State = Status.TimedOut;
+               receive.Message = "Operation Timed Out";
                break;
          }
-         return Receive;
+         return receive;
       }
       #endregion RequestData
 
       #region SendData
 
 
-      private RWSts SendData(byte[] aRS232set, RWSts Send)
+      private RWSts SendData(byte[] rs232Set, RWSts send)
       {
          // buffer that stores the data received back from the EPOS           
 
          if (_com1.IsOpen)
          {
             byte[] RS232buffer = new byte[_com1.BytesToRead];
-            switch (Send.Step)
+            switch (send.Step)
             {
                // initialise variables used for communication
                case 0:
-                  Send.Step = 1;
-                  Send.State = Status.Processing;
+                  send.Step = 1;
+                  send.State = Status.Processing;
                   break;
 
                case 1:
                   // send the first byte in the array, representing the op code
-                  _com1.Write(aRS232set, 0, 1);
+                  _com1.Write(rs232Set, 0, 1);
                   // Store curent ticks + 1 second for timeout on recieve
                   _endTicks = Environment.TickCount + 1000;
                   // Go to next step
-                  Send.Step = 2;
+                  send.Step = 2;
                   break;
 
                case 2:
                   // Wait for event handler data recieved
                   if (_dataReceived)
                   {
-                     Send.Step = 3;
+                     send.Step = 3;
                   }
                   if (Environment.TickCount > _endTicks)
                   {
                      // No response within 1 second
-                     Send.Step = 40;
+                     send.Step = 40;
                   }
                   break;
 
@@ -342,27 +346,27 @@ namespace MotorControllers.EposMotor
                   // Read the response from the EPOS                          
                   _com1.Read(RS232buffer, 0, _com1.BytesToRead);
                   _dataReceived = false;
-                  Send.Step = 4;
+                  send.Step = 4;
                   break;
 
                case 4:
                   // Write request to read  (bytes 1->11 are part of the request)
-                  _com1.Write(aRS232set, 1, 11);
+                  _com1.Write(rs232Set, 1, 11);
                   // Store curent ticks + 1 second for timeout on recieve
                   _endTicks = Environment.TickCount + 1000;
-                  Send.Step = 5;
+                  send.Step = 5;
                   break;
 
                case 5:
                   // Wait for event handler data recieved
                   if (_dataReceived)
                   {
-                     Send.Step = 6;
+                     send.Step = 6;
                   }
                   if (Environment.TickCount > _endTicks)
                   {
                      // No response within 1 second
-                     Send.Step = 40;
+                     send.Step = 40;
                   }
                   break;
 
@@ -373,34 +377,34 @@ namespace MotorControllers.EposMotor
                   // Check if the response back is an 'O' character to say OPCode was received OKEn
                   if (RS232buffer[0] == 79)
                   {
-                     Send.Step = 7;
+                     send.Step = 7;
                   }
                   else
                   {
                      // Error was received
-                     Send.Step = 30;
+                     send.Step = 30;
                   }
                   break;
 
                case 7:
                   // send the 12th byte in the array, representing an acknowledgement (character 'O')
-                  _com1.Write(aRS232set, 12, 1);
+                  _com1.Write(rs232Set, 12, 1);
                   // Store curent ticks + 1 second for timeout on recieve
                   _endTicks = Environment.TickCount + 1000;
                   // Go to next step
-                  Send.Step = 8;
+                  send.Step = 8;
                   break;
 
                case 8:
                   // Wait for event handler data recieved
                   if (_dataReceived)
                   {
-                     Send.Step = 9;
+                     send.Step = 9;
                   }
                   if (Environment.TickCount > _endTicks)
                   {
                      // No response within 1 second
-                     Send.Step = 40;
+                     send.Step = 40;
                   }
                   break;
 
@@ -408,40 +412,40 @@ namespace MotorControllers.EposMotor
                   // Read the response from the EPOS                          
                   _com1.Read(RS232buffer, 0, _com1.BytesToRead);
                   _dataReceived = false;
-                  Send.Step = 10;
+                  send.Step = 10;
                   break;
 
                case 10:
                   // send the 12th byte in the array, representing an acknowledgement (character 'O')
-                  _com1.Write(aRS232set, 12, 1);
+                  _com1.Write(rs232Set, 12, 1);
 
                   // Operation finished sucessfully
-                  Send.Step = 20;
+                  send.Step = 20;
                   break;
 
                // Operation Finished sucessfully
                case 20:
-                  Send.Step = 0;
-                  Send.State = Status.FinishedOk;
-                  Send.Message = "Operation Finished Sucessfully";
+                  send.Step = 0;
+                  send.State = Status.FinishedOk;
+                  send.Message = "Operation Finished Sucessfully";
                   break;
 
                // Communications error received
                case 30:
-                  Send.Step = 0;
-                  Send.State = Status.Failed;
-                  Send.Message = "Communication Error Received";
+                  send.Step = 0;
+                  send.State = Status.Failed;
+                  send.Message = "Communication Error Received";
                   break;
 
                // Operation timed out
                case 40:
-                  Send.Step = 0;
-                  Send.State = Status.TimedOut;
-                  Send.Message = "Operation Timed Out";
+                  send.Step = 0;
+                  send.State = Status.TimedOut;
+                  send.Message = "Operation Timed Out";
                   break;
             }
          }
-         return Send;
+         return send;
       }
 
 
