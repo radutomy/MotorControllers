@@ -678,9 +678,74 @@ namespace MotorControllers.EposMotor
          return initDone;
       }
 
+      /*  DisableEposDrive disables the Epos by writing the ControlWord
+       *  Step numbers and their function:
+       *      0. Initialise variables used for communication
+       *         Attempty to open COM port; if the COM port is busy, report InitFail (jump to Step 30)
+       *         Attach serial event handler
+       *      1. Write the a disable command via the ControlWord
+       *      20. Report that the Epos has been Disabled successfully
+       *      30. Report that the Epos Disable command failed
+       */
+      private static RWSts _disVoltSts = new RWSts();
       public PrgSts Disable()
       {
-         throw new System.NotImplementedException();
+         var disableDone = new PrgSts();
+         while (disableDone.State == Status.Processing)
+         {
+            switch (disableDone.Step)
+            {
+               case 0:
+                  // data received event handler for COM1
+                  _comPort.DataReceived += new SerialDataReceivedEventHandler(DataReceived);
+                  try
+                  {
+                     // Open the port for communications
+                     _comPort.Open();
+                     disableDone.State = Status.Processing;
+                     disableDone.Step = 1;
+                  }
+                  catch (Exception e)
+                  {
+                     disableDone.Step = 30;
+                     disableDone.Message = "DisableEpos Port Failed to Open";
+                  }
+                  break;
+
+               // Disable Epos command
+               case 1:
+
+                  _disVoltSts = SendData(FormatWriteMessage(0x6040, 0x00), _disVoltSts);
+
+                  if (_disVoltSts.State == Status.FinishedOk)
+                  {
+                     disableDone.Step = 20;
+                  }
+                  else if (_disVoltSts.State == Status.Failed || _disVoltSts.State == Status.TimedOut)
+                  {
+                     disableDone.Step = 30;
+                     disableDone.Message = "Error Writing the DisableEpos command";
+                  }
+                  break;
+
+               // Report Disable Epos successful
+               case 20:
+                  disableDone.Step = 0;
+                  disableDone.State = Status.FinishedOk;
+                  disableDone.Message = "Epos is sucessfully Disabled";
+                  // close com port when done
+                  _comPort.Close();
+                  break;
+
+               // Report Disable Epos failed
+               case 30:
+                  disableDone.Step = 0;
+                  disableDone.State = Status.Failed;
+                  _comPort.Close();
+                  break;
+            }
+         }
+         return disableDone;
       }
 
       public PrgSts SetSpeed(double speed)
