@@ -3,10 +3,10 @@ using System.IO.Ports;
 
 namespace MotorControllers.EposMotor
 { 
-   public class EposMotor : IMotorBasicFunctions
+   public class EposMotor : IEposFunctions
    {
       // serial port object with the appropriate settings
-      private SerialPort _comPort;
+      private readonly SerialPort _comPort;
       
       int _endTicks = 0;                           // used to measure time
       ushort _statusWord;                          // stores the last response from a Read request
@@ -29,7 +29,7 @@ namespace MotorControllers.EposMotor
       }
 
       // Read/Write states
-      private class RWSts : PrgSts
+      private class RwSts : PrgSts
       {
          
       }
@@ -151,10 +151,10 @@ namespace MotorControllers.EposMotor
 
       #region ReceiveData
 
-      private RWSts ReceiveData(byte[] rs232Set, RWSts receive)
+      private RwSts ReceiveData(byte[] rs232Set, RwSts receive)
       {
          // dynamicly re-sizeable array based on the amount of bytes in the serial receive buffer
-         byte[] rs232Buff = new byte[_comPort.BytesToRead];
+         var rs232Buff = new byte[_comPort.BytesToRead];
 
          switch (receive.Step)
          {
@@ -310,7 +310,7 @@ namespace MotorControllers.EposMotor
       #region SendData
 
 
-      private RWSts SendData(byte[] rs232Set, RWSts send)
+      private RwSts SendData(byte[] rs232Set, RwSts send)
       {
          // buffer that stores the data received back from the EPOS           
 
@@ -460,14 +460,14 @@ namespace MotorControllers.EposMotor
       public PrgSts Enable()
       {
          var initDone = new PrgSts();
-         var readWordSts = new RWSts();
-         var shutDownSts = new RWSts();
-         var resVolSts = new RWSts();
-         var setVelSts = new RWSts();
-         var swOnSts = new RWSts();
-         var setOpSts = new RWSts();
-         var setAccSts = new RWSts();
-         var disVolSts = new RWSts();
+         var readWordSts = new RwSts();
+         var shutDownSts = new RwSts();
+         var resVolSts = new RwSts();
+         var setVelSts = new RwSts();
+         var swOnSts = new RwSts();
+         var setOpSts = new RwSts();
+         var setAccSts = new RwSts();
+         var disVolSts = new RwSts();
 
          while (initDone.State == Status.Processing)
          {
@@ -687,7 +687,7 @@ namespace MotorControllers.EposMotor
        *      20. Report that the Epos has been Disabled successfully
        *      30. Report that the Epos Disable command failed
        */
-      private static RWSts _disVoltSts = new RWSts();
+      private static RwSts _disVoltSts = new RwSts();
       public PrgSts Disable()
       {
          var disableDone = new PrgSts();

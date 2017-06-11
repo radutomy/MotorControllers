@@ -1,5 +1,8 @@
 ﻿namespace MotorControllers
 {
+   /// <summary>
+   /// Common functionality for all motors
+   /// </summary>
    public interface IMotorBasicFunctions
    {
       /// <summary>
