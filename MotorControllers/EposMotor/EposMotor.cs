@@ -747,10 +747,80 @@ namespace MotorControllers.EposMotor
          }
          return disableDone;
       }
-
+      
+      /*  SetSpeed sets the Epos CalculatedSpeed by writing the Velocity Mode RPM
+       *  The function takes a the CalculatedSpeed in mm/min as a parameter and converts it into the RPM
+       *  The resulting RPM is used to writing the Velocity Mode RPM setting
+       *  Step numbers and their function:
+       *      0. Initialise variables used for communication
+       *         Attempty to open COM port; if the COM port is busy, report InitFail (jump to Step 30)
+       *         Attach serial event handler
+       *      1. Write the CalculatedSpeed via the Velocity Mode RPM
+       *      20. Report that the CalculatedSpeed has been set successfully
+       *      30. Report that the CalculatedSpeed setting command has failed
+       */
       public PrgSts SetSpeed(double speed)
       {
-         throw new System.NotImplementedException();
+         var prgSetSpeed = new PrgSts();
+         var setSpdSts = new RwSts();
+         // calculate the RPM as a function of speed (speed is in mm/s)
+         Int32 rpm = (Int32) (((speed * 81) / (Math.PI * 84)) * 60);
+
+         while (prgSetSpeed.State == Status.Processing)
+         {
+            switch (prgSetSpeed.Step)
+            {
+               case 0:
+
+                  // data received event handler for COM1
+                  _comPort.DataReceived += new SerialDataReceivedEventHandler(DataReceived);
+                  try
+                  {
+                     // Open the port for communications  
+                     _comPort.Open();
+                     prgSetSpeed.State = Status.Processing;
+                     prgSetSpeed.Step = 1;
+                  }
+                  catch (Exception e)
+                  {
+                     prgSetSpeed.Step = 30;
+                     prgSetSpeed.Message = "SetSpeed Port Failed to Open/n" + e.Message;
+                  }
+                  break;
+
+               // Set speed Epos command
+               case 1:
+
+                  setSpdSts = SendData(FormatWriteMessage(0x206B, rpm), setSpdSts);
+                  if (setSpdSts.State == Status.FinishedOk)
+                  {
+                     prgSetSpeed.Step = 20;
+                  }
+                  else if (setSpdSts.State == Status.Failed || setSpdSts.State == Status.TimedOut)
+                  {
+                     prgSetSpeed.Step = 30;
+                     prgSetSpeed.Message = "Error Writing the SetSpeed command";
+                  }
+                  break;
+
+               // Report Disable Epos successful
+               case 20:
+                  prgSetSpeed.Step = 0;
+                  prgSetSpeed.State = Status.FinishedOk;
+                  prgSetSpeed.Message = "Motor speed sucessfully set";
+                  // close com port when done
+                  _comPort.Close();
+                  break;
+
+               // Report Disable Epos failed
+               case 30:
+                  prgSetSpeed.Step = 0;
+                  prgSetSpeed.State = Status.Failed;
+                  _comPort.Close();
+                  break;
+            }
+         }
+         return prgSetSpeed;
       }
    }
 }

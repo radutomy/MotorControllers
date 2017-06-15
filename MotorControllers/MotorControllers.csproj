@@ -42,6 +42,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="EposMotor\EposMotor.cs" />
+    <Compile Include="EposMotor\IEposFunctions.cs" />
+    <Compile Include="FestoMotor\FestoMotor.cs" />
+    <Compile Include="FestoMotor\IFestoFunctions.cs" />
     <Compile Include="IMotorBasicFunctions.cs" />
     <Compile Include="ProgressStats.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
