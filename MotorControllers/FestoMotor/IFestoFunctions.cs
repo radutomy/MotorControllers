@@ -1,7 +1,7 @@
 namespace MotorControllers.FestoMotor
 {
-    public interface IFestoFunctions : IMotorBasicFunctions
-    {
+   public interface IFestoFunctions : IMotorBasicFunctions
+   {
         
-    }
+   }
 }

@@ -17,7 +17,7 @@ namespace MotorControllers.EposMotor
       public EposMotor(ushort portNum)
       {
          if (portNum < 1)
-            throw new ArgumentOutOfRangeException(nameof(portNum) + " cannot be zero");
+            throw new ArgumentOutOfRangeException(nameof(portNum) + " cannot be less than zero");
          
          _comPort = new SerialPort("COM" + portNum, 9600, Parity.None, 8, StopBits.One);
       }
@@ -309,7 +309,28 @@ namespace MotorControllers.EposMotor
 
       #region SendData
 
-
+      /*  Generic format for writing a value to the motor
+     *  This function takes the pased byte aray containing a set of instructions that writes a value to the drive
+     *  The communications protocol in the drive requires the parts of the message to be sent in a specific order.
+     *  Each time a message is sent the drive responds with a code (either 'O' or 'F') identifying OKEn or Failed
+     *  The order of the message structure is as follows:
+     *      Step 1 = Send op code byte                                       -> stored in byte 0 of the byte array
+     *      Step 2 = Wait for received event triggered, 
+     *               if not recieved in 1 second exit under fault 
+     *      Step 3 = Check for "O" / 'F' response
+     *      Step 4 = Send the write value request                            -> stored in bytes 1-11 of array (See FormatWriteMessage for byte definition)
+     *      Step 5 = Wait for received event triggered;             
+     *               if not recieved in 1 second exit under fault 
+     *      Step 6 = Check for "O" / 'F' response
+     *      Step 7 = Send "O" for acknowledgement                           -> stored in byte 12 of the byte array
+     *      Step 8 = Wait for the received event triggered
+     *               if not received in 1 second exit under fault
+     *      Step 9 = Receive a response from the Epos
+     *      Step 10 = Send an "O" for acknowledgement                      -> stored in byte 12 of the byte array
+     *      --------
+     *      Step 20 = Data sent correctly
+     *      Step 30 = Communication failure with the Epos 
+     *      Step 40 = Time Out in receiving a response from the */
       private RwSts SendData(byte[] rs232Set, RwSts send)
       {
          // buffer that stores the data received back from the EPOS           
@@ -453,9 +474,57 @@ namespace MotorControllers.EposMotor
          return send;
       }
 
-
       #endregion SendData
 
+      /* 
+       * The function performs the following:
+       * Reads the status of the Epos 
+       * At any time, the motor can be
+       *      Switch On Disable
+       *      Ready To Switch On
+       *      SwitchedOn
+       *      Operation Enabled      
+       *      Fault Mode
+       *      QuickStop Active
+       *      
+       * The purpose of the EnableEposFunction function is to get the motor in the Operation Enabled state
+       * In order to do that the motor performs the following steps
+       *      Reads the status
+       *      If the Motor is in Fault Mode, reset the Fault 
+       *      If QuickStop is enabled, turn QuickStop off 
+       *      Read the status
+       *      If the motor is Switch On Disabled, perform a "ShutDown" function (note: this is not a mistake, the terminilogy is used in the manual)
+       *      Read the status
+       *      If the motor is Ready to Switch On, or SwitchedOn then perform a 'SwitchOnAndEnableVoltage' command 
+       *      The motor is now Enabled and ready to receive commands
+       *      
+       *      Set the operation mode to Velocity (OpMode = -2)
+       *      Set the Maximum Velocity to ...
+       *      Set the Maximum Acceleration to...
+       *      
+       * Step numbers and their function:
+       *      0. Initialise variables used for communication
+       *         Attempty to open COM port; if the COM port is busy, report InitFail (jump to Step 30)
+       *         Attach serial event handler
+       *      1. Read Epos Status Word and decode Epos State
+       *         Based on the status, perform the following operations; see the SDS flowchart page 36
+       *      2. Send ShutDown command
+       *      3. Send SwitchOnAndEnVoltage command
+       *      4. Send SetOpNo command
+       *      5. Send SetMaxVelocity command
+       *      6. Send SetMaxAcceleration command; report InitDone (jump to Step 20)
+       *      7. Send DisableVoltage command
+       *      8. Send ResetFault command
+       *      20. Report that the Epos has been Enabled successfully
+       *      30. Report that the Epos Enable failed
+       *      
+       * The index values used for Writing/Reading a value in the Epos (See SDS, page 28)
+       *      StatusWord     - 0x6041
+       *      ControlWord    - 0x6040
+       *      SetOpNumber    - 0x6060
+       *      SetMaxVelocity - 0x607F
+       *      SetMaxAcc      - 0x60C5
+       */
 
       public PrgSts Enable()
       {

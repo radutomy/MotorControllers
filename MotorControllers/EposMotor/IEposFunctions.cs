@@ -1,7 +1,6 @@
 namespace MotorControllers.EposMotor
 {
-    public interface IEposFunctions : IMotorBasicFunctions
-    {
-        
-    }
+   public interface IEposFunctions : IMotorBasicFunctions
+   {
+   }
 }
